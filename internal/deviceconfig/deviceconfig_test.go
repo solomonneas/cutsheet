@@ -95,6 +95,11 @@ func TestApplyDefaults(t *testing.T) {
 		t.Errorf("unifi Vendor default = %q, want unifi-json", d.Vendor)
 	}
 
+	d = ApplyDefaults(store.Device{ID: "mesh", CollectorType: "eero", CollectorConfig: `{"session_token":"tok"}`})
+	if d.Vendor != "generic" {
+		t.Errorf("eero Vendor default = %q, want generic", d.Vendor)
+	}
+
 	d = ApplyDefaults(store.Device{ID: "gw2", Name: "Edge", Vendor: "edgeos", CollectorType: "file", CollectorConfig: `{}`})
 	if d.Name != "Edge" || d.Vendor != "edgeos" {
 		t.Errorf("explicit name/vendor overridden: %+v", d)
@@ -104,6 +109,9 @@ func TestApplyDefaults(t *testing.T) {
 func TestSuggestedVendor(t *testing.T) {
 	if got := SuggestedVendor("unifi", []byte(`{}`)); got != "unifi-json" {
 		t.Errorf("unifi: got %q", got)
+	}
+	if got := SuggestedVendor("eero", []byte(`{}`)); got != "generic" {
+		t.Errorf("eero: got %q", got)
 	}
 	if got := SuggestedVendor("ssh", []byte(`{"preset":"edgeos"}`)); got != "edgeos" {
 		t.Errorf("ssh edgeos preset: got %q", got)

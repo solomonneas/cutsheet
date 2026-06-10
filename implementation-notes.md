@@ -363,3 +363,50 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   existing SSH collector. A future "eero" collector against the unofficial eero
   cloud API is the real-gear path; it should emit a stable-sorted JSON snapshot
   (generic parser first, dedicated eero-json parser later).
+
+## 2026-06-09 - eero cloud collector
+
+- **New "eero" collector** against the unofficial eero cloud API
+  (`https://api-user.e2ro.com/2.2`), mirroring the proven behavior of the
+  eero-cli project (which wraps fulviofreitas/eero-api) rather than inventing
+  endpoints. Auth is a session cookie: every request carries the token as the
+  `s` cookie, no Authorization header. Responses use a
+  `{"meta":...,"data":...}` envelope.
+- **No OTP login, no refresh.** Cutsheet does not implement eero's
+  login -> SMS/email code -> verify flow; users obtain a session token out of
+  band (eero-cli `eero auth`) and paste it into the collector config. The
+  library's refresh endpoint (`POST /2.2/account/refresh`) requires a
+  `refresh_token` that the OTP login flow never issues, and sessions are
+  long-lived (~30 days) without rotation, so the collector skips refresh
+  logic entirely: a 401 surfaces a clear "re-authenticate and update
+  session_token" error instead of silently rotating a credential that v1
+  could not write back to the device config anyway.
+- **Config:** `{"session_token": "..." (encrypted at rest, registered in the
+  collector sensitiveFields map), "network_id": optional, "base_url":
+  optional test override}`. With no network_id, a sole network is
+  auto-selected; a multi-network account errors with a name=id listing
+  (stricter than eero-cli's warn-and-use-first, deliberate for a
+  non-interactive poller). An explicit network_id is validated against the
+  account's networks listing, which itself tolerates the three response
+  shapes eero has served (bare array, `{"networks":[...]}`,
+  `{"networks":{"count":N,"data":[...]}}`).
+- **Snapshot document:** one deterministic JSON doc with alphabetical
+  top-level sections - eeros, forwards, network, profiles, reservations -
+  from `GET networks/{id}` plus the eeros/forwards/profiles/reservations
+  subresources. The eero cloud mixes telemetry into config payloads, so
+  network detail, eero nodes, and profiles are whitelist-filtered to config
+  fields (drops client lists, speed tests, health, geo_ip, heartbeats,
+  status); forwards and reservations are pure config and pass through whole.
+  Arrays sort by resource `url` (every eero object carries one), JSON
+  fallback. 2-space indent + sorted keys + trailing newline so the generic
+  line differ produces readable diffs. Determinism proven by a shuffled fake
+  server in tests (golden fixture, UPDATE_GOLDEN=1 refresh).
+- **Vendor default is "generic"** (`SuggestedVendor("eero") = "generic"`).
+  There is no eero parser in pkg/configdiff yet; the generic text parser
+  diffs the pretty-printed JSON lines acceptably. A dedicated eero-json
+  parser in pkg/configdiff is future work, intentionally not part of this
+  change.
+- **Header note from reading the prior art:** the Python lib builds a
+  `DEFAULT_HEADERS` dict (User-Agent etc.) but never actually attaches it to
+  requests, so the cloud API demonstrably does not gate on User-Agent; the
+  collector sends Go's default UA.

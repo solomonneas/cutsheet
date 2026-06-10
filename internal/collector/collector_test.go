@@ -25,6 +25,7 @@ func TestNew(t *testing.T) {
 		{"empty type", "", `{}`, true},
 		{"ssh incomplete config", "ssh", `{"address":"198.18.0.1"}`, true},
 		{"unifi incomplete config", "unifi", `{"site":"default"}`, true},
+		{"eero incomplete config", "eero", `{"network_id":"1"}`, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -99,6 +100,7 @@ func TestNeedsSecrets(t *testing.T) {
 		{"file", false},
 		{"unifi", true},
 		{"ssh", true},
+		{"eero", true},
 		{"carrier-pigeon", false},
 	}
 	for _, tt := range tests {
@@ -161,6 +163,31 @@ func TestEncryptConfig(t *testing.T) {
 			if !secrets.IsEncrypted(value) {
 				t.Fatalf("%s not encrypted: %q", field, value)
 			}
+		}
+	})
+
+	t.Run("eero session_token encrypted", func(t *testing.T) {
+		out, err := EncryptConfig("eero", []byte(`{"session_token":"tok-123","network_id":"1"}`), box)
+		if err != nil {
+			t.Fatalf("EncryptConfig: %v", err)
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal(out, &cfg); err != nil {
+			t.Fatalf("parse output: %v", err)
+		}
+		token, _ := cfg["session_token"].(string)
+		if !secrets.IsEncrypted(token) {
+			t.Fatalf("session_token not encrypted: %q", token)
+		}
+		plain, err := box.Decrypt(token)
+		if err != nil {
+			t.Fatalf("Decrypt: %v", err)
+		}
+		if string(plain) != "tok-123" {
+			t.Fatalf("decrypted session_token: got %q", plain)
+		}
+		if id, _ := cfg["network_id"].(string); id != "1" {
+			t.Fatalf("non-sensitive field changed: %q", id)
 		}
 	})
 

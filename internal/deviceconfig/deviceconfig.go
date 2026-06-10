@@ -61,12 +61,16 @@ func ApplyDefaults(d store.Device) store.Device {
 
 // SuggestedVendor picks a configdiff parser mode from the collector setup
 // when the caller did not specify one: unifi collectors emit controller
-// JSON, and ssh presets name the vendor they target. Returns "" when there
-// is no better suggestion than "auto".
+// JSON, ssh presets name the vendor they target, and eero collectors emit a
+// pretty-printed JSON snapshot the generic line differ handles (a dedicated
+// eero-json parser is future work). Returns "" when there is no better
+// suggestion than "auto".
 func SuggestedVendor(collectorType string, configJSON []byte) string {
 	switch collectorType {
 	case "unifi":
 		return "unifi-json"
+	case "eero":
+		return "generic"
 	case "ssh":
 		var cfg struct {
 			Preset string `json:"preset"`

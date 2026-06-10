@@ -1,7 +1,7 @@
 // Package collector fetches device configurations. Collectors are read-only
 // by design: Cutsheet never writes to a device. v1 ships "file" (fixtures and
-// demo mode), "unifi" (UniFi Network controller API), and "ssh" (generic
-// command runner with vendor presets).
+// demo mode), "unifi" (UniFi Network controller API), "ssh" (generic command
+// runner with vendor presets), and "eero" (unofficial eero cloud API).
 package collector
 
 import (
@@ -29,6 +29,7 @@ var factories = map[string]factory{
 	"file":  newFileCollector,
 	"unifi": newUnifiCollector,
 	"ssh":   newSSHCollector,
+	"eero":  newEeroCollector,
 }
 
 // sensitiveFields lists, per collector type, the top-level string fields in
@@ -36,6 +37,7 @@ var factories = map[string]factory{
 var sensitiveFields = map[string][]string{
 	"unifi": {"password"},
 	"ssh":   {"password", "private_key"},
+	"eero":  {"session_token"},
 }
 
 // New builds a collector of the given type from its JSON config. box supplies

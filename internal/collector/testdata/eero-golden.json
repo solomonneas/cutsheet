@@ -1,0 +1,133 @@
+{
+  "eeros": [
+    {
+      "gateway": true,
+      "location": "Living Room",
+      "mac_address": "00:00:5E:00:53:01",
+      "model": "eero Pro 6",
+      "model_number": "K010001",
+      "os": "eeroOS 7.5.1-8",
+      "os_version": "7.5.1",
+      "serial": "S1111111111111",
+      "url": "/2.2/eeros/11",
+      "wired": true
+    },
+    {
+      "gateway": false,
+      "location": "Office",
+      "mac_address": "00:00:5E:00:53:02",
+      "model": "eero Pro 6",
+      "model_number": "K010001",
+      "os": "eeroOS 7.5.1-8",
+      "os_version": "7.5.1",
+      "serial": "S2222222222222",
+      "url": "/2.2/eeros/12",
+      "wired": true
+    }
+  ],
+  "forwards": [
+    {
+      "client_port": 443,
+      "description": "web server",
+      "enabled": true,
+      "gateway_port": 443,
+      "ip": "198.18.50.20",
+      "protocol": "tcp",
+      "url": "/2.2/networks/1/forwards/21"
+    },
+    {
+      "client_port": 22,
+      "description": "ssh jump",
+      "enabled": false,
+      "gateway_port": 2222,
+      "ip": "198.18.50.21",
+      "protocol": "tcp",
+      "url": "/2.2/networks/1/forwards/22"
+    }
+  ],
+  "network": {
+    "band_steering": true,
+    "dhcp": {
+      "custom": {
+        "end_ip": "198.18.50.200",
+        "start_ip": "198.18.50.10",
+        "subnet_ip": "198.18.50.0",
+        "subnet_mask": "255.255.255.0"
+      },
+      "mode": "custom"
+    },
+    "dns": {
+      "custom": {
+        "ips": [
+          "198.18.0.53",
+          "198.18.0.54"
+        ]
+      },
+      "mode": "custom"
+    },
+    "guest_network": {
+      "enabled": true,
+      "name": "Home Guest",
+      "password": "guest-pass"
+    },
+    "ipv6_upstream": false,
+    "name": "Home",
+    "password": "wifi-passphrase",
+    "sqm": true,
+    "thread": false,
+    "upnp": false,
+    "url": "/2.2/networks/1",
+    "wpa3": true
+  },
+  "profiles": [
+    {
+      "content_filter": {
+        "adblock": false
+      },
+      "name": "Adults",
+      "paused": false,
+      "url": "/2.2/networks/1/profiles/31"
+    },
+    {
+      "content_filter": {
+        "adblock": true,
+        "block_adult": true,
+        "safe_search": true
+      },
+      "name": "Kids",
+      "paused": true,
+      "premium_dns": {
+        "blocked_applications": [
+          "tiktok"
+        ]
+      },
+      "schedule": {
+        "blocks": [
+          {
+            "days": [
+              "mon"
+            ],
+            "end": "06:00",
+            "start": "21:00"
+          }
+        ],
+        "enabled": true
+      },
+      "url": "/2.2/networks/1/profiles/32"
+    }
+  ],
+  "reservations": [
+    {
+      "description": "nas",
+      "ip": "198.18.50.30",
+      "mac": "00:00:5E:00:53:10",
+      "url": "/2.2/networks/1/reservations/41"
+    },
+    {
+      "description": "printer",
+      "ip": "198.18.50.31",
+      "mac": "00:00:5E:00:53:11",
+      "url": "/2.2/networks/1/reservations/42"
+    }
+  ]
+}

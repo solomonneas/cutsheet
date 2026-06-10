@@ -342,7 +342,7 @@ func parseDeviceAdd(args []string) (addedDevice, error) {
 	name := fs.String("name", "", "display name (defaults to id)")
 	vendor := fs.String("vendor", "auto", "configdiff parser mode (e.g. cisco-ios, unifi-json, auto)")
 	address := fs.String("address", "", "device address")
-	collectorType := fs.String("collector", "file", "collector type (file, unifi, ssh)")
+	collectorType := fs.String("collector", "file", "collector type (file, unifi, ssh, eero)")
 	configJSON := fs.String("config", "{}", "collector config JSON")
 	interval := fs.Int("interval", 300, "poll interval in seconds (0 = manual only)")
 	disabled := fs.Bool("disabled", false, "register the device without polling it")
