@@ -1,0 +1,29 @@
+{
+  "parser": "cisco-ios",
+  "detected_vendor": "cisco",
+  "device_type": "switch",
+  "block_changes": 12,
+  "touched_interfaces": 2,
+  "touched_vlans": 4,
+  "touched_routes": 2,
+  "touched_rules": 1,
+  "touched_nat": 1,
+  "touched_vpn": 1,
+  "switching_changes": 1,
+  "rollback_confidence": "risky",
+  "risk_titles": [
+    "AAA or authentication changed",
+    "ACL or firewall rule appears broadened",
+    "Management service may be exposed",
+    "Interface VLAN assignment changed",
+    "Interface shutdown state changed",
+    "Trunk allowed VLAN list changed",
+    "Management access changed",
+    "NAT configuration changed",
+    "Logging or monitoring may be reduced",
+    "Default route changed",
+    "Route removed",
+    "VLAN removed",
+    "VPN peer or tunnel configuration changed"
+  ]
+}

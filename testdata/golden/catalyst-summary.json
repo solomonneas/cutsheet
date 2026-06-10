@@ -1,0 +1,27 @@
+{
+  "parser": "cisco-ios",
+  "detected_vendor": "cisco",
+  "device_type": "switch",
+  "block_changes": 9,
+  "touched_interfaces": 3,
+  "touched_vlans": 7,
+  "touched_routes": 0,
+  "touched_rules": 0,
+  "touched_nat": 0,
+  "touched_vpn": 0,
+  "switching_changes": 12,
+  "rollback_confidence": "risky",
+  "risk_titles": [
+    "Interface VLAN assignment changed",
+    "Trunk allowed VLAN list changed",
+    "Switchport mode changed",
+    "Trunk carries all VLANs",
+    "BPDU protection reduced or PortFast on trunk",
+    "Storm-control reduced or removed",
+    "Trunk native VLAN changed",
+    "EtherChannel membership or mode changed",
+    "Spanning-tree mode changed",
+    "Spanning-tree root or priority changed",
+    "VTP mode or domain changed"
+  ]
+}

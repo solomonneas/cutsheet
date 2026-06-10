@@ -1,0 +1,15 @@
+{
+  "networkconf": [
+    {"_id": "n1", "name": "Corp", "vlan": 10, "purpose": "corporate", "ip_subnet": "198.19.10.1/24"},
+    {"_id": "n2", "name": "IoT", "vlan": 31, "purpose": "corporate", "ip_subnet": "198.19.30.1/24"}
+  ],
+  "port_overrides": [
+    {"port_idx": 10, "op_mode": "switch", "native_networkconf_id": "n2", "forward": "all", "poe_mode": "auto"}
+  ],
+  "firewallrule": [
+    {"_id": "f1", "name": "LAN_IN_1", "ruleset": "LAN_IN", "action": "accept", "src_address": "0.0.0.0/0", "dst_address": "0.0.0.0/0", "protocol": "all"}
+  ],
+  "routing": [
+    {"_id": "r1", "name": "DEFAULT", "type": "static-route", "static-route_network": "0.0.0.0/0", "static-route_nexthop": "203.0.113.9"}
+  ]
+}

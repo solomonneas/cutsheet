@@ -1,0 +1,7 @@
+/cutsheet
+/reports/
+/dist/
+/coverage.out
+.DS_Store
+.claude/
+node_modules/

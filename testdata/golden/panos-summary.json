@@ -1,0 +1,24 @@
+{
+  "parser": "panos",
+  "detected_vendor": "paloalto",
+  "device_type": "firewall",
+  "block_changes": 7,
+  "touched_interfaces": 2,
+  "touched_vlans": 0,
+  "touched_routes": 2,
+  "touched_rules": 1,
+  "touched_nat": 1,
+  "touched_vpn": 0,
+  "switching_changes": 0,
+  "rollback_confidence": "risky",
+  "risk_titles": [
+    "AAA or authentication changed",
+    "ACL or firewall rule appears broadened",
+    "Management service may be exposed",
+    "Management access changed",
+    "NAT configuration changed",
+    "Logging or monitoring may be reduced",
+    "Default route changed",
+    "Route removed"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "parser": "cisco-ios",
+  "detected_vendor": "ubiquiti",
+  "device_type": "switch",
+  "block_changes": 7,
+  "touched_interfaces": 2,
+  "touched_vlans": 0,
+  "touched_routes": 1,
+  "touched_rules": 0,
+  "touched_nat": 0,
+  "touched_vpn": 0,
+  "switching_changes": 1,
+  "rollback_confidence": "risky",
+  "risk_titles": [
+    "Spanning-tree mode changed",
+    "Default route changed"
+  ]
+}

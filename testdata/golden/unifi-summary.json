@@ -1,0 +1,20 @@
+{
+  "parser": "unifi-json",
+  "detected_vendor": "ubiquiti",
+  "device_type": "gateway",
+  "block_changes": 4,
+  "touched_interfaces": 1,
+  "touched_vlans": 4,
+  "touched_routes": 1,
+  "touched_rules": 1,
+  "touched_nat": 0,
+  "touched_vpn": 0,
+  "switching_changes": 1,
+  "rollback_confidence": "risky",
+  "risk_titles": [
+    "Default route changed",
+    "ACL or firewall rule appears broadened",
+    "Interface VLAN assignment changed",
+    "Trunk native VLAN changed"
+  ]
+}

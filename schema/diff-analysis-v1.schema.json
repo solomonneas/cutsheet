@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/cutsheet/diff-analysis-v1.schema.json",
+  "title": "Cutsheet Analysis v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "detected_platform",
+    "block_changes",
+    "touched_interfaces",
+    "touched_vlans",
+    "touched_routes",
+    "touched_acl_firewall_rules",
+    "touched_nat_objects",
+    "touched_vpn_objects",
+    "management_plane_changes",
+    "aaa_changes",
+    "logging_snmp_ntp_dns_changes",
+    "switching_changes",
+    "risk_findings",
+    "rollback"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "enum": ["1.1"] },
+    "detected_platform": {
+      "type": "object",
+      "required": ["requested_vendor", "parser", "detected_vendor", "device_type", "confidence", "signals"],
+      "properties": {
+        "requested_vendor": { "type": "string" },
+        "parser": { "type": "string" },
+        "detected_vendor": { "type": "string" },
+        "device_type": { "type": "string" },
+        "confidence": { "type": "number" },
+        "signals": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "block_changes": { "type": "array", "items": { "$ref": "#/$defs/block_change" } },
+    "touched_interfaces": { "type": "array", "items": { "$ref": "#/$defs/touched_interface" } },
+    "touched_vlans": { "type": "array", "items": { "$ref": "#/$defs/touched_vlan" } },
+    "touched_routes": { "type": "array", "items": { "$ref": "#/$defs/touched_route" } },
+    "touched_acl_firewall_rules": { "type": "array", "items": { "$ref": "#/$defs/touched_rule" } },
+    "touched_nat_objects": { "type": "array", "items": { "$ref": "#/$defs/touched_object" } },
+    "touched_vpn_objects": { "type": "array", "items": { "$ref": "#/$defs/touched_object" } },
+    "management_plane_changes": { "type": "array", "items": { "$ref": "#/$defs/category_change" } },
+    "aaa_changes": { "type": "array", "items": { "$ref": "#/$defs/category_change" } },
+    "logging_snmp_ntp_dns_changes": { "type": "array", "items": { "$ref": "#/$defs/category_change" } },
+    "switching_changes": { "type": "array", "items": { "$ref": "#/$defs/switching_change" } },
+    "risk_findings": { "type": "array", "items": { "$ref": "#/$defs/risk_finding" } },
+    "rollback": {
+      "type": "object",
+      "required": ["confidence", "summary", "snippets"],
+      "properties": {
+        "confidence": { "type": "string", "enum": ["clean", "partial", "risky", "unknown"] },
+        "summary": { "type": "string" },
+        "snippets": { "type": "array", "items": { "$ref": "#/$defs/rollback_snippet" } }
+      }
+    }
+  },
+  "$defs": {
+    "string_array": { "type": "array", "items": { "type": "string" } },
+    "block_change": {
+      "type": "object",
+      "required": ["id", "kind", "change_type", "header"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "change_type": { "type": "string", "enum": ["added", "removed", "changed"] },
+        "header": { "type": "string" },
+        "before_lines": { "$ref": "#/$defs/string_array" },
+        "after_lines": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "touched_interface": {
+      "type": "object",
+      "required": ["name", "change_type"],
+      "properties": {
+        "name": { "type": "string" },
+        "change_type": { "type": "string" },
+        "before_lines": { "$ref": "#/$defs/string_array" },
+        "after_lines": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "touched_vlan": {
+      "type": "object",
+      "required": ["id", "change_type", "evidence"],
+      "properties": {
+        "id": { "type": "string" },
+        "change_type": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "touched_route": {
+      "type": "object",
+      "required": ["prefix", "change_type", "evidence"],
+      "properties": {
+        "prefix": { "type": "string" },
+        "change_type": { "type": "string" },
+        "before_next_hop": { "type": "string" },
+        "after_next_hop": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "touched_rule": {
+      "type": "object",
+      "required": ["name", "change_type", "evidence"],
+      "properties": {
+        "name": { "type": "string" },
+        "action": { "type": "string" },
+        "protocol": { "type": "string" },
+        "source": { "type": "string" },
+        "destination": { "type": "string" },
+        "service": { "type": "string" },
+        "change_type": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "touched_object": {
+      "type": "object",
+      "required": ["name", "kind", "change_type", "evidence"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string" },
+        "change_type": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "category_change": {
+      "type": "object",
+      "required": ["category", "change_type", "evidence"],
+      "properties": {
+        "category": { "type": "string" },
+        "change_type": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "switching_change": {
+      "type": "object",
+      "required": ["category", "subject", "change_type", "evidence"],
+      "properties": {
+        "category": { "type": "string" },
+        "subject": { "type": "string" },
+        "change_type": { "type": "string", "enum": ["added", "removed", "changed"] },
+        "before": { "type": "string" },
+        "after": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/string_array" }
+      }
+    },
+    "risk_finding": {
+      "type": "object",
+      "required": ["id", "severity", "category", "title", "details", "evidence", "recommendation"],
+      "properties": {
+        "id": { "type": "string" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "details": { "$ref": "#/$defs/string_array" },
+        "evidence": { "$ref": "#/$defs/string_array" },
+        "recommendation": { "type": "string" }
+      }
+    },
+    "rollback_snippet": {
+      "type": "object",
+      "required": ["change_id", "kind", "header", "lines", "manual_review_required", "note"],
+      "properties": {
+        "change_id": { "type": "string" },
+        "kind": { "type": "string" },
+        "header": { "type": "string" },
+        "lines": { "$ref": "#/$defs/string_array" },
+        "exact_reapply": { "$ref": "#/$defs/string_array" },
+        "candidate_commands": { "$ref": "#/$defs/string_array" },
+        "manual_review_required": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}
