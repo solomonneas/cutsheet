@@ -426,3 +426,30 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   config to the frr.conf baseline, which cutsheet then records as drift
   (useful: it exercises change detection on every lab restart).
 - vtysh warns `Can't open /etc/frr/vtysh.conf` on exec; cosmetic, output is fine.
+
+## 2026-06-10 - Audit fixes from the line-check report
+
+- Bumped golang.org/x/crypto v0.50.0 -> v0.52.0 (5 reachable vulns via the
+  SSH collector) and pinned `toolchain go1.25.11` in go.mod (go1.25.0 stdlib
+  vulns); added a govulncheck step to CI so the next CVE fails loudly.
+- Declared Go 1.25 as the floor everywhere (README badge, AGENTS.md, CI
+  go-version); go.mod is the source of truth. The old "1.22+" claim only
+  worked through GOTOOLCHAIN auto-downloads.
+- Documented the eero collector: README device-add example with the
+  out-of-band session-token flow, architecture diagram entry, parsers.md
+  note (eero snapshots are generic-diffed JSON, no parser mode).
+- New CI `web` job: `npm ci && npm run build` then
+  `git diff --exit-code web/dist`, so the committed embedded UI can no
+  longer drift from web/src and TypeScript errors fail CI. Also added a
+  gofmt gate to the Go job (one unformatted file had already slipped in).
+- Wired version injection: `make build` and `make docker-build` pass
+  `git describe --tags --always` via `-X main.version`. The Docker context
+  excludes .git, so the Dockerfile takes a `VERSION` build arg and compose
+  forwards `$VERSION` (default `dev`). Plain `docker compose up --build`
+  therefore still reports `dev` unless VERSION is exported; acceptable until
+  release builds go through make. Seeded CHANGELOG.md (Keep a Changelog)
+  with an Unreleased section covering everything shipped so far.
+- Deliberately NOT done: eero collector form in the web UI Devices page
+  (Devices.tsx only knows file/ssh/unifi); that is a feature, not an audit
+  doc fix. The README screenshot TODO (INFO finding) was also left as is,
+  not in scope.
