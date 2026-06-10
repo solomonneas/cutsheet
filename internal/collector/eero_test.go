@@ -112,7 +112,7 @@ var fakeEeroSections = map[string][]map[string]any{
 	"profiles": {
 		{
 			"url": "/2.2/networks/1/profiles/32", "name": "Kids", "paused": true,
-			"schedule": map[string]any{"enabled": true, "blocks": []any{map[string]any{"days": []any{"mon"}, "start": "21:00", "end": "06:00"}}},
+			"schedule":       map[string]any{"enabled": true, "blocks": []any{map[string]any{"days": []any{"mon"}, "start": "21:00", "end": "06:00"}}},
 			"content_filter": map[string]any{"adblock": true, "safe_search": true, "block_adult": true},
 			"premium_dns":    map[string]any{"blocked_applications": []any{"tiktok"}},
 			// Volatile:
