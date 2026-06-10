@@ -6,7 +6,10 @@ Decisions log: `implementation-notes.md` (keep it updated as you work - SOP).
 
 ## Ground rules
 
-- Go 1.25+ server/library, React/TS UI (later). TDD: test first, then implementation.
+- Go 1.25+ server/library. React/TS UI lives in `web/`; its build output
+  (`web/dist`) is committed and embedded into the server binary via go:embed,
+  so run `make ui` and commit the rebuilt dist after changing `web/src` (CI
+  fails on drift). TDD: test first, then implementation.
 - `pkg/configdiff` is the public analysis library. Its `Explain()` is a pure function
   and the JSON schema (`schema/diff-analysis-v1.schema.json`) is a stable contract.
   Do not add side effects or network calls to it.
@@ -26,7 +29,7 @@ Decisions log: `implementation-notes.md` (keep it updated as you work - SOP).
 ```bash
 make test      # go test ./...
 make vet
-make build     # builds ./cutsheet from cmd/cutsheet-cli
+make build     # builds ./cutsheet (server, cmd/cutsheet) and ./cutsheet-cli (diff CLI, cmd/cutsheet-cli)
 make sample-report
 ```
 
@@ -34,6 +37,7 @@ make sample-report
 
 - NO managed network hardware available at all: no Cisco/Palo Alto, no UniFi
   controller, no EdgeOS gateway. Home network is eero mesh only. Live testing:
-  containerlab (VyOS/FRR via the SSH collector) is the primary testbed; a future
-  eero collector (unofficial cloud API, prior art in solomonneas/eero-cli) is the
-  only real-gear option. Everything else: testdata fixtures.
+  containerlab (VyOS/FRR via the SSH collector) is the primary testbed; the
+  eero collector (`internal/collector/eero.go`, unofficial cloud API, prior
+  art in solomonneas/eero-cli) is the only real-gear option. Everything else:
+  testdata fixtures.
