@@ -7,14 +7,20 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# Stage 2: build the static server binary.
+# Stage 2: build the static server binary. The build context excludes .git
+# (see .dockerignore), so the version arrives as a build arg: `make
+# docker-build` passes `git describe --tags --always`, and the compose file
+# forwards $VERSION from the host environment when set.
 FROM golang:1.25-alpine AS build
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/cutsheet ./cmd/cutsheet
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-s -w -X main.version=${VERSION}" \
+    -o /out/cutsheet ./cmd/cutsheet
 
 # Stage 3: runtime. Alpine instead of distroless on purpose: the compose
 # healthcheck needs an in-container HTTP probe (busybox wget) and first-run

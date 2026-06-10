@@ -1,6 +1,11 @@
 services:
   cutsheet:
-    build: .
+    build:
+      context: .
+      args:
+        # Reported by /healthz. `make docker-build` injects `git describe`;
+        # plain `docker compose up --build` uses $VERSION or falls back to dev.
+        VERSION: ${VERSION:-dev}
     image: cutsheet:latest
     container_name: cutsheet
     restart: unless-stopped

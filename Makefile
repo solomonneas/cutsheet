@@ -2,6 +2,7 @@
 
 BINARY ?= cutsheet
 CLI_BINARY ?= cutsheet-cli
+VERSION ?= $(shell git describe --tags --always)
 DEMO_DIR ?= ./demo-data
 DOCKER_IMAGE ?= cutsheet:latest
 SAMPLE_OUT ?= ./reports/change-001
@@ -15,9 +16,9 @@ vet:
 	go vet ./...
 
 # Builds both binaries: the server/platform (cutsheet) and the offline diff
-# CLI (cutsheet-cli).
+# CLI (cutsheet-cli). The server reports VERSION via /healthz.
 build:
-	go build -o $(BINARY) ./cmd/cutsheet
+	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) ./cmd/cutsheet
 	go build -o $(CLI_BINARY) ./cmd/cutsheet-cli
 
 # Seeds a zero-hardware demo data dir with sample devices and analyzed
@@ -25,8 +26,10 @@ build:
 demo:
 	go run ./cmd/cutsheet demo --data-dir $(DEMO_DIR)
 
+# The build context excludes .git (see .dockerignore), so the version is
+# resolved here and passed in as a build arg.
 docker-build:
-	docker build -t $(DOCKER_IMAGE) .
+	docker build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE) .
 
 # Rebuilds the web UI into web/dist, which is committed to git and embedded
 # into the server binary via go:embed. Run `make ui` then rebuild the server
