@@ -301,3 +301,48 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   index fallback at `/devices` and `/changes/{id}`, JSON `/healthz`,
   hashed-asset content types, and headless-Chrome renders of all four views
   including a 13-finding high-severity change detail.
+
+## 2026-06-09 - Release prep (demo mode, Docker, README)
+
+- **Demo fixtures are embedded copies, not testdata reads.** `cutsheet demo`
+  must work from any install location (Docker image, `go install` binary), so
+  `internal/demo/fixtures/` holds copies of the four before/after testdata
+  pairs (catalyst, edgeos, unifi, fortinet) behind a go:embed. go:embed cannot
+  reach `../../testdata` across package boundaries, and reading the repo
+  checkout at runtime would break installed binaries. Cost: ~8 small files
+  duplicated; they only change when the testdata pairs do, and the demo test
+  pins severity "high" per device so drift surfaces immediately.
+- **Demo inventory:** core-switch (cisco-ios), branch-gateway (edgeos),
+  campus-unifi (unifi-json), dmz-firewall (fortinet); all four pairs verified
+  to produce high-severity findings (11/10/4/6). Seeding goes through the real
+  file collector + snapshot store + pipeline, not a shortcut, so the data dir
+  is indistinguishable from a real one and stays pollable (configs live at
+  `<data-dir>/demo-configs/`). Refuses non-empty data dirs.
+- **Dockerfile: alpine runtime, not distroless.** The compose healthcheck
+  needs an in-container HTTP probe (busybox wget) and the token-bootstrap flow
+  is friendlier with a shell for `docker compose exec`; the static binary
+  makes the base choice cosmetic (~8 MB delta). Non-root user, /data volume
+  pre-created with matching ownership.
+- **ENTRYPOINT/CMD split instead of the spec'd full-serve ENTRYPOINT.** With
+  serve args baked into ENTRYPOINT, `docker compose run cutsheet demo ...`
+  would append the demo args to the serve command line. ENTRYPOINT
+  ["cutsheet"] + CMD ["serve", ...] keeps `up` behavior identical while
+  making one-shot subcommands (demo seeding, token create on a stopped stack)
+  work the standard way.
+- **Docker auth caveat documented in README:** published-port requests reach
+  the container from the Docker bridge, never loopback, so the zero-token
+  localhost allowance cannot apply in compose; the quickstart makes
+  `docker compose exec cutsheet cutsheet token create` a first-class step.
+  Compose publishes on 127.0.0.1 by default. NOT smoke-tested here: no docker
+  on this machine; the image build + healthcheck + exec flow need a pass on a
+  docker host before release.
+- **README rewritten as the adoption surface** (docker-compose quickstart
+  first, demo mode, real-device examples on 198.18.x, notifications, security
+  model, roadmap teaser). Deep parser content (extraction lists, risk-finding
+  list, limitations, architecture) moved to docs/parsers.md; the vendor table
+  stayed in the README. The old CLI-centric README content survives between
+  the two files.
+- **`make build` now builds both binaries** (`cutsheet` from cmd/cutsheet,
+  `cutsheet-cli` from cmd/cutsheet-cli). The old target built only the CLI
+  under the name "cutsheet", which collided with the server binary the README
+  now leads with. Added `make demo` and `make docker-build`.
