@@ -1,0 +1,21 @@
+services:
+  cutsheet:
+    build: .
+    image: cutsheet:latest
+    container_name: cutsheet
+    restart: unless-stopped
+    ports:
+      # Bound to localhost by default. To expose on the LAN, change to
+      # "8633:8633" and make sure you have created an API token first.
+      - "127.0.0.1:8633:8633"
+    volumes:
+      - cutsheet-data:/data
+    environment:
+      # Passed through from the host environment (or a .env file) when set.
+      - CUTSHEET_WEBHOOK_URL
+      - CUTSHEET_DISCORD_WEBHOOK_URL
+      - CUTSHEET_NOTIFY_MIN_SEVERITY
+      - CUTSHEET_SECRET_KEY
+
+volumes:
+  cutsheet-data:

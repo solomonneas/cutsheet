@@ -1,0 +1,15 @@
+.git
+.claude
+.dockerignore
+Dockerfile
+docker-compose.yml
+node_modules
+web/node_modules
+web/dist
+cutsheet
+cutsheet-cli
+demo-data
+reports
+coverage.out
+docs
+*.md
