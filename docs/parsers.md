@@ -13,6 +13,11 @@ UniFi controller configs are JSON rather than line-oriented CLI text. The
 JSON parser flattens the export into deterministic pseudo-lines and emits
 CLI-equivalent readable lines so the same risk findings apply.
 
+Eero snapshots (from the server's eero collector) are a deterministic JSON
+document assembled from the unofficial eero cloud API (network settings,
+nodes, profiles, port forwards, DHCP reservations) and diffed by the
+generic analyzer; there is no eero-specific parser mode.
+
 Supported deterministic extraction includes:
 
 - added, removed, and changed config blocks

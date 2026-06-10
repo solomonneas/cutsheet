@@ -95,6 +95,26 @@ cutsheet device add --data-dir ./data \
   --config '{"url":"https://198.18.0.20","username":"audit","password":"REDACTED","site":"default"}'
 ```
 
+Eero network (unofficial cloud API, the one the mobile app uses):
+
+```bash
+cutsheet device add --data-dir ./data \
+  --id home-eero --name "Home Mesh" --address api-user.e2ro.com \
+  --collector eero \
+  --config '{"session_token":"REDACTED","network_id":"1234567"}'
+```
+
+Cutsheet does not run eero's OTP login flow (login, SMS/email code, verify).
+Obtain a session token out of band, for example with
+[eero-cli](https://github.com/solomonneas/eero-cli) (`eero auth`), and paste
+it as `session_token`. Tokens from that flow are long-lived (about 30 days)
+and carry no refresh token, so there is no transparent refresh: when the API
+returns 401, re-authenticate and update `session_token`. `network_id` is
+optional when the account has exactly one network; with several, the error
+message lists them. Snapshots are a deterministic JSON document (network
+settings, nodes, profiles, port forwards, reservations) diffed by the
+generic analyzer.
+
 Notes:
 
 - Passwords and private keys are encrypted at rest (NaCl secretbox) the
@@ -128,7 +148,7 @@ is `low`, meaning any change with at least one finding.
 ## How it works
 
 ```
-scheduler -> collector (SSH / UniFi API / file) -> git snapshot store
+scheduler -> collector (SSH / UniFi API / eero cloud API / file) -> git snapshot store
                                                         |
                                             change detected on commit
                                                         v
