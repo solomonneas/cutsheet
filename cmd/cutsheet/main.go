@@ -18,6 +18,7 @@ import (
 
 	"github.com/solomonneas/cutsheet/internal/api"
 	"github.com/solomonneas/cutsheet/internal/collector"
+	"github.com/solomonneas/cutsheet/internal/demo"
 	"github.com/solomonneas/cutsheet/internal/deviceconfig"
 	"github.com/solomonneas/cutsheet/internal/notify"
 	"github.com/solomonneas/cutsheet/internal/pipeline"
@@ -50,6 +51,8 @@ func run(args []string) error {
 		return runDevice(args[1:])
 	case "token":
 		return runToken(args[1:])
+	case "demo":
+		return runDemo(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
@@ -246,6 +249,31 @@ func makeSnapshotNow(st *store.Store, snaps *snapshots.SnapshotStore, box *secre
 		}
 		return &change, true, nil
 	}
+}
+
+// runDemo seeds a fresh data dir with sample devices and analyzed changes so
+// the platform can be evaluated with zero hardware.
+func runDemo(args []string) error {
+	fs := flag.NewFlagSet("demo", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	dataDir := fs.String("data-dir", "", "data directory to seed (must be empty or missing)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *dataDir == "" {
+		return fmt.Errorf("demo requires --data-dir")
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	summary, err := demo.Run(context.Background(), *dataDir, logger)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Seeded demo data: %d devices, %d changes, %d risk findings.\n\n",
+		summary.Devices, summary.Changes, summary.Findings)
+	fmt.Println("Next steps:")
+	fmt.Printf("  cutsheet serve --data-dir %s\n", *dataDir)
+	fmt.Println("  open http://127.0.0.1:8633")
+	return nil
 }
 
 // notifySettings is the resolved notification config for serve.
@@ -583,7 +611,7 @@ func openDataDir(dataDir string) (*store.Store, *snapshots.SnapshotStore, error)
 
 func usageError() error {
 	printUsage()
-	return fmt.Errorf("expected command: serve, device add|list|rm, or token create|list|rm")
+	return fmt.Errorf("expected command: serve, demo, device add|list|rm, or token create|list|rm")
 }
 
 func printUsage() {
@@ -592,6 +620,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  cutsheet device add --data-dir ./data --id edge-gw1 --name 'Edge Gateway' --vendor edgeos --collector file --config '{\"path\":\"/abs/path/gw1.cfg\"}' --interval 300")
 	fmt.Fprintln(os.Stderr, "  cutsheet device list --data-dir ./data")
 	fmt.Fprintln(os.Stderr, "  cutsheet device rm --data-dir ./data --id edge-gw1")
+	fmt.Fprintln(os.Stderr, "  cutsheet demo --data-dir ./demo-data")
 	fmt.Fprintln(os.Stderr, "  cutsheet token create --data-dir ./data --name ci")
 	fmt.Fprintln(os.Stderr, "  cutsheet token list --data-dir ./data")
 	fmt.Fprintln(os.Stderr, "  cutsheet token rm --data-dir ./data --id 1")
