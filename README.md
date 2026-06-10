@@ -1,7 +1,7 @@
 # Cutsheet
 
 [![CI](https://github.com/solomonneas/cutsheet/actions/workflows/ci.yml/badge.svg)](https://github.com/solomonneas/cutsheet/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 **Cutsheet watches your network device configs and tells you what changed and whether you should be worried.**

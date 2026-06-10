@@ -6,7 +6,7 @@ Decisions log: `implementation-notes.md` (keep it updated as you work - SOP).
 
 ## Ground rules
 
-- Go 1.22+ server/library, React/TS UI (later). TDD: test first, then implementation.
+- Go 1.25+ server/library, React/TS UI (later). TDD: test first, then implementation.
 - `pkg/configdiff` is the public analysis library. Its `Explain()` is a pure function
   and the JSON schema (`schema/diff-analysis-v1.schema.json`) is a stable contract.
   Do not add side effects or network calls to it.
