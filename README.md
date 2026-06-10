@@ -1,78 +1,150 @@
 # Cutsheet
 
 [![CI](https://github.com/solomonneas/cutsheet/actions/workflows/ci.yml/badge.svg)](https://github.com/solomonneas/cutsheet/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.22)
-[![Privacy](https://img.shields.io/badge/privacy-offline%20only-2ea44f)](#privacy-model)
-[![Vendors](https://img.shields.io/badge/vendors-8%20parser%20paths-6f42c1)](#supported-input-types)
-[![Schema](https://img.shields.io/badge/schema-v1.1-informational)](schema/diff-analysis-v1.schema.json)
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-`cutsheet` is a network change intelligence toolkit. Today it ships an offline CLI for reviewing before and after network device configuration changes. It parses device configs into deterministic facts, compares the normalized state, then writes operator-ready reports that explain what changed, what is risky, and how to validate or roll back the change.
+**Cutsheet watches your network device configs and tells you what changed and whether you should be worried.**
 
-It is built for change review workflows where configs may contain sensitive infrastructure details. Files stay local, analysis is deterministic, and generated reports are written with owner-only permissions where the operating system supports them.
+It polls your switches, gateways, firewalls, and UniFi controllers on a schedule, keeps every config snapshot in a git-backed history, and runs each change through a deterministic risk analyzer. Instead of a wall of colored diff lines, you get a timeline of changes with findings like "trunk now carries all VLANs" or "firewall rule broadened to any/any", plus rollback and validation plans an on-call engineer can actually use. Everything runs in a single binary on your own hardware; no agent installs, no cloud, and it never pushes config to a device.
 
-## Highlights
+<!-- TODO: screenshot of the web UI change timeline -->
 
-- Offline by default: no API calls, no telemetry, and no controller login.
-- Deterministic analysis: structured facts come before human-readable reports.
-- Multi-vendor parser paths for Cisco IOS/IOS XE, Juniper Junos, Fortinet FortiOS, Palo Alto PAN-OS, Ubiquiti EdgeSwitch, Ubiquiti EdgeOS/VyOS, UniFi controller JSON, and generic text configs.
-- Practical risk findings for routes, ACLs, VLANs, trunks, Layer 2 protections, NAT, VPNs, AAA, management access, and monitoring.
-- Report bundles designed for operators, reviewers, and stakeholders, including a local HTML view for browser-based review.
-
-## Quick Start
-
-Build the CLI from the project root:
+## Quick start (Docker)
 
 ```bash
-make build
+git clone https://github.com/solomonneas/cutsheet.git
+cd cutsheet
+docker compose up -d --build
 ```
 
-Run an explanation against two config files:
+Create an API token (required in Docker, see note below):
 
 ```bash
-cutsheet explain \
-  --before ./before.cfg \
-  --after ./after.cfg \
-  --vendor auto \
-  --out ./reports/change-001
+docker compose exec cutsheet cutsheet token create --data-dir /data --name admin
 ```
 
-Generate the included lab-safe sample report:
+Open http://localhost:8633, paste the token in Settings, and add your first device.
+
+> **Why the token is required in Docker:** Cutsheet allows tokenless requests
+> from localhost only while zero tokens exist, as a first-run convenience.
+> Inside Docker, your browser's requests arrive through the published port and
+> reach the container from the Docker bridge network, not loopback, so that
+> allowance never applies. Create one token and use it; that also closes the
+> tokenless door entirely.
+
+The compose file binds the port to `127.0.0.1` on the host. To reach Cutsheet
+from other machines, change the port mapping to `"8633:8633"` after you have
+created a token.
+
+### Without Docker
 
 ```bash
-make sample-report
+go build -o cutsheet ./cmd/cutsheet
+./cutsheet serve --data-dir ./data
 ```
 
-Open `./reports/change-001/report.html` in a browser to review the generated HTML diff report.
+The server listens on `127.0.0.1:8633` by default and works tokenless from
+the same machine until you create a token with `cutsheet token create`.
 
-The output directory contains:
+## Try it with zero hardware
 
-| File | Purpose |
-| --- | --- |
-| `diff-analysis.json` | Structured deterministic analysis facts |
-| `change-summary.md` | Human-readable summary of the change |
-| `risk-analysis.md` | Risk findings and supporting evidence |
-| `touched-objects.md` | Interfaces, VLANs, routes, and other affected objects |
-| `rollback-plan.md` | Before-config facts and candidate rollback guidance |
-| `validation-plan.md` | Checks to run before and after the change |
-| `operator-checklist.md` | Step-by-step operator checklist |
-| `stakeholder-brief.md` | Short non-technical impact summary |
-| `report.html` | Local browser view with filters, summary metrics, risk findings, touched objects, rollback guidance, validation steps, and side-by-side changed blocks |
+Demo mode seeds a data directory with four sample devices (Cisco Catalyst
+switch, EdgeOS gateway, UniFi controller, FortiGate firewall) and replays a
+realistic config change on each, so the timeline shows real risk-analyzed
+changes immediately:
 
-`reports/` is gitignored because report bundles can contain sensitive configuration snippets.
+```bash
+./cutsheet demo --data-dir ./demo-data
+./cutsheet serve --data-dir ./demo-data
+# open http://localhost:8633
+```
 
-![Cutsheet HTML report screenshot](docs/assets/cutsheet-report.png)
+Or in Docker, before the volume has any data in it:
 
-## Privacy Model
+```bash
+docker compose run --rm cutsheet demo --data-dir /data
+docker compose up -d
+```
 
-- Configs are read from local files only.
-- No network access is required.
-- Configs are not sent to external APIs.
-- The v1 explanation layer is deterministic and offline.
-- Output files may contain sensitive config snippets, so report files are written with owner-only file permissions where the operating system supports them.
+Demo mode refuses to touch a non-empty data directory, so it can never
+clobber real monitoring data.
 
-## Supported Input Types
+## Adding real devices
 
-Use `--vendor auto` to select a parser when the config has strong vendor signals. If no confident match exists, the CLI falls back to `generic`.
+Collectors are read-only: they run `show`-style commands or call read APIs.
+Cutsheet never writes to a device.
+
+SSH device (EdgeOS example; presets exist for `edgeos`, `vyos`, `cisco-ios`,
+`junos`, `fortios`):
+
+```bash
+cutsheet device add --data-dir ./data \
+  --id branch-gw1 --name "Branch Gateway" --address 198.18.0.1 \
+  --collector ssh \
+  --config '{"host":"198.18.0.1","username":"audit","password":"REDACTED","preset":"edgeos","host_key":"ssh-ed25519 AAAA..."}' \
+  --interval 300
+```
+
+UniFi controller:
+
+```bash
+cutsheet device add --data-dir ./data \
+  --id campus-unifi --name "Campus Controller" --address 198.18.0.20 \
+  --collector unifi \
+  --config '{"url":"https://198.18.0.20","username":"audit","password":"REDACTED","site":"default"}'
+```
+
+Notes:
+
+- Passwords and private keys are encrypted at rest (NaCl secretbox) the
+  moment the device is added. Set `CUTSHEET_SECRET_KEY` (64 hex chars) to
+  control the key yourself; otherwise one is generated at
+  `<data-dir>/secret.key` with owner-only permissions.
+- SSH host keys are verified against the configured `host_key`. Skipping
+  verification requires an explicit `"insecure_ignore_host_key": true`.
+- `--interval` is the poll interval in seconds (`0` = manual snapshots
+  only). You can also trigger a snapshot any time from the UI or with
+  `POST /api/v1/devices/{id}/snapshot`.
+- Devices can equally be managed through the web UI or the REST API.
+
+## Notifications
+
+Cutsheet can push every analyzed change to a generic webhook (JSON POST) and
+to Discord, filtered by severity:
+
+```bash
+cutsheet serve --data-dir ./data \
+  --webhook-url https://example.com/hook \
+  --discord-webhook-url https://discord.com/api/webhooks/... \
+  --notify-min-severity medium
+```
+
+The same settings are read from `CUTSHEET_WEBHOOK_URL`,
+`CUTSHEET_DISCORD_WEBHOOK_URL`, and `CUTSHEET_NOTIFY_MIN_SEVERITY` (flags
+win). Severity ladder: `none` < `low` < `medium` < `high`; the default floor
+is `low`, meaning any change with at least one finding.
+
+## How it works
+
+```
+scheduler -> collector (SSH / UniFi API / file) -> git snapshot store
+                                                        |
+                                            change detected on commit
+                                                        v
+   web UI + REST API <- SQLite (devices, changes, findings) <- risk analysis
+            |                                                  (pkg/configdiff)
+            +-> notifier (webhook / Discord)
+```
+
+Every poll fetches the device's full config. If it differs from the last
+snapshot, the change is committed to a per-device path in a git repo, then
+analyzed by [`pkg/configdiff`](docs/parsers.md), a deterministic, offline
+analysis library with a stable JSON schema. Each change gets a report bundle
+(risk analysis, rollback plan, validation plan, operator checklist,
+stakeholder brief, HTML view) stored on disk and served through the UI.
+
+Vendor support:
 
 | Parser path | Vendor modes | Input shape | Notes |
 | --- | --- | --- | --- |
@@ -85,117 +157,66 @@ Use `--vendor auto` to select a parser when the config has strong vendor signals
 | Fortinet FortiGate/FortiOS | `fortinet`, `fortigate`, `fortios` | `config` and `edit` block text | Initial deterministic FortiOS parser path |
 | UniFi Network controller | `unifi`, `unifi-json`, `unifi-controller` | JSON export | Flattens JSON into stable pseudo-lines and readable CLI-equivalent lines |
 
-UniFi controller configs are JSON rather than line-oriented CLI text. The JSON parser flattens the export into deterministic pseudo-lines and emits CLI-equivalent readable lines so the same risk findings apply. The privacy model is unchanged: configs are read from local files only, with no controller API access.
+See [docs/parsers.md](docs/parsers.md) for extraction coverage, the full
+risk-finding list, and per-vendor limitations.
 
-Supported deterministic extraction includes:
+## Offline diff CLI
 
-- added, removed, and changed config blocks
-- interfaces
-- VLANs and trunk/access VLAN references
-- Layer 2 switching semantics for Catalyst-style switches: switchport mode, trunk scope, native VLAN, spanning-tree mode, root/priority, PortFast, BPDU guard, EtherChannel/port-channel, VTP, and storm-control
-- static routes and default routes
-- route next-hop changes where detectable
-- ACL/firewall-style permit and deny rules, including first-pass action/protocol/source/destination/service extraction
-- NAT-like objects and lines
-- VPN/tunnel/crypto-like objects and lines
-- management-plane access such as SSH, SNMP, HTTP, and line access
-- AAA/authentication, local users, RADIUS, and TACACS-like lines
-- logging, SNMP, NTP, and DNS lines
+The analysis engine also ships as a standalone tool for one-off change
+review with two config files and no server:
 
-## Risk Findings
+```bash
+go build -o cutsheet-cli ./cmd/cutsheet-cli
+cutsheet-cli explain --before before.cfg --after after.cfg --vendor auto --out ./reports/change-001
+```
 
-The v1 risk engine flags at least:
-
-- default route changes
-- route removals
-- ACL/firewall broadening such as `any any`, broad CIDRs, and exposed management ports
-- VLAN removals and interface VLAN changes
-- trunk allowed VLAN changes
-- Layer 2 switching changes: switchport mode flips, trunks carrying all VLANs, native VLAN changes, spanning-tree mode and root/priority changes, reduced BPDU protection or PortFast on trunks, EtherChannel membership/mode changes, VTP mode/domain changes, and storm-control reductions
-- shutdown/no shutdown changes
-- NAT changes
-- VPN peer/tunnel changes
-- AAA/auth changes
-- management access changes such as SSH/SNMP/HTTP
-- logging/monitoring removal
-
-## Parser Architecture
-
-The parser layer is separated from analysis and reporting:
-
-| Layer | Role |
+| Flag | Meaning |
 | --- | --- |
-| Parser | Normalizes text, groups sections and blocks, and detects generic platform signals |
-| Analyzer | Diffs normalized blocks, extracts touched objects, assigns risks, and builds rollback facts |
-| Explanation provider | Renders reports from deterministic facts |
+| `--before` | Path to the before config |
+| `--after` | Path to the after config |
+| `--vendor` | Parser mode from the table above, or `auto` |
+| `--out` | Output directory for the report bundle |
 
-The first explanation provider is offline and deterministic. A future provider can use the same `ExplanationProvider` interface, but deterministic analysis remains the source of truth.
+The bundle contains `diff-analysis.json` (stable schema v1.1),
+`change-summary.md`, `risk-analysis.md`, `touched-objects.md`,
+`rollback-plan.md`, `validation-plan.md`, `operator-checklist.md`,
+`stakeholder-brief.md`, and `report.html` for browser review.
 
-## Current Limitations
+## Security model
 
-- Cisco IOS/IOS XE support is an initial deterministic parser path built on IOS-style section parsing and heuristics, not full semantic emulation of every platform feature.
-- Ubiquiti EdgeSwitch/UbiquitiOS support rides the IOS-style parse path and is labeled `ubiquiti`; EdgeSwitch-native VLAN forms such as `vlan participation` are recognized for detection but do not yet produce typed VLAN findings.
-- EdgeOS/VyOS support is an initial deterministic parser path for `set`/`delete` style gateway configs. Curly-brace hierarchical form is not yet parsed, and interface `disable` toggles are not yet flagged.
-- Junos support is an initial deterministic parser path for `set`/`delete` style configs, not full semantic emulation of every platform feature.
-- Palo Alto PAN-OS support is an initial deterministic parser path for set-style configuration form. XML exports, Panorama device-group/template hierarchy, and multi-vsys are out of scope.
-- UniFi controller support reads JSON exports from common single-site collections such as `networkconf`, `port_overrides`, `firewallrule`, and `routing`. XML or `.unf` backups, multi-site exports, and live controller API fetches are out of scope.
-- Fortinet support is an initial deterministic parser path for FortiOS `config`/`edit` blocks, not full semantic emulation of every platform feature.
-- The parser uses deterministic heuristics and may miss vendor-specific semantics.
-- Report prose is practical guidance, not a replacement for device-specific command validation.
-- Rollback snippets preserve before-config facts and separate exact reapply snippets from candidate commands. Candidate commands are not authoritative and may require operator review.
+- **Read-only by design.** Collectors fetch config; there is no code path
+  that pushes config to a device. This is permanent, not a roadmap item.
+- **Credentials encrypted at rest.** Device passwords and SSH keys are
+  sealed with NaCl secretbox before they touch the database. API responses
+  never include them, even encrypted.
+- **Token auth.** API access uses bearer tokens (`cutsheet token create`);
+  only salted hashes are stored, validated in constant time. Tokens are
+  managed from the CLI only, so an API-level attacker cannot mint tokens.
+- **Local data.** Snapshots, analysis, and report files live in your data
+  directory. No telemetry, no external calls except the webhooks you
+  configure.
+- **Loopback by default.** The server binds `127.0.0.1` unless you say
+  otherwise; the compose file publishes the port on `127.0.0.1` too.
 
 ## Roadmap
 
-Future parser packages should implement the same parser contract and emit the same stable v1 analysis shape where possible.
-
-Parser roadmap:
-
-- deeper Cisco IOS and IOS XE semantics
-- deeper Juniper Junos semantics
-- deeper Fortinet FortiGate semantics
-- deeper Palo Alto PAN-OS semantics
-- pfSense
-- MikroTik RouterOS
-
-Near-term improvements:
-
-- broader JSON Schema validation coverage for clean/no-change outputs and future parser variants
-- vendor-specific rollback command generation
-- polished HTML frontend design pass, potentially generated with Opus and kept offline/static
-- richer ACL and firewall rule normalization across vendor-specific syntaxes
-- route table intent summaries
-- optional local-only or explicitly configured explanation providers
+- Compliance packs: CIS/NIST rule sets per vendor, drift against golden
+  configs, audit evidence export.
+- AWS network state (security groups, route tables, NACLs) in the same
+  change timeline as your switches and firewalls.
+- Remote-site collector daemons (outbound-only, MSP-friendly) and
+  syslog-triggered instant snapshots.
 
 ## Development
 
-Run tests:
-
 ```bash
-make test
-```
-
-Run vet:
-
-```bash
+make test    # go test ./...
 make vet
+make build   # builds ./cutsheet (server) and ./cutsheet-cli (diff CLI)
+make ui      # rebuild the embedded web UI after changing web/src
+make demo    # seed ./demo-data with sample devices
 ```
 
-Build the binary:
+## License
 
-```bash
-make build
-```
-
-Regenerate the README screenshot from the lab-safe HTML report:
-
-```bash
-make screenshot
-```
-
-The screenshot target uses `google-chrome` in headless mode by default. Override the browser binary when needed:
-
-```bash
-make screenshot CHROME=chromium
-```
-
-The test suite includes compact JSON golden summaries for Cisco IOS-style, Junos-style, and other sample configs under `testdata/golden/`. Update those fixtures only when an intentional parser, risk, or output-shape change affects the expected summary.
+Apache-2.0. See [LICENSE](LICENSE).
