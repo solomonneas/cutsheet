@@ -8,3 +8,4 @@
 .claude/
 node_modules/
 .brigade/
+site/.vercel/
