@@ -1,0 +1,87 @@
+{
+  "networkconf": [
+    {
+      "_id": "n1",
+      "ip_subnet": "198.19.10.1/24",
+      "name": "Corp",
+      "purpose": "corporate",
+      "vlan": 10
+    },
+    {
+      "_id": "n2",
+      "ip_subnet": "198.19.30.1/24",
+      "name": "IoT",
+      "purpose": "corporate",
+      "vlan": 30
+    }
+  ],
+  "portconf": [
+    {
+      "_id": "p1",
+      "forward": "all",
+      "name": "All"
+    }
+  ],
+  "port_overrides": [
+    {
+      "forward": "all",
+      "native_networkconf_id": "n1",
+      "op_mode": "switch",
+      "poe_mode": "auto",
+      "port_idx": 10
+    },
+    {
+      "forward": "disabled",
+      "native_networkconf_id": "n2",
+      "op_mode": "switch",
+      "port_idx": 24
+    }
+  ],
+  "firewallrule": [
+    {
+      "_id": "f1",
+      "action": "accept",
+      "dst_address": "198.19.30.10",
+      "name": "LAN_IN_1",
+      "protocol": "tcp",
+      "ruleset": "LAN_IN",
+      "src_address": "198.19.10.0/24"
+    },
+    {
+      "_id": "f2",
+      "action": "drop",
+      "name": "LAN_IN_2",
+      "protocol": "all",
+      "ruleset": "LAN_IN",
+      "src_address": "198.19.30.0/24"
+    }
+  ],
+  "firewallgroup": [
+    {
+      "_id": "g1",
+      "group_members": [
+        "198.19.10.5",
+        "198.19.10.6"
+      ],
+      "group_type": "address-group",
+      "name": "mgmt-hosts"
+    }
+  ],
+  "routing": [
+    {
+      "_id": "r1",
+      "name": "DEFAULT",
+      "static-route_network": "0.0.0.0/0",
+      "static-route_nexthop": "203.0.113.1",
+      "type": "static-route"
+    }
+  ],
+  "wlanconf": [
+    {
+      "_id": "w1",
+      "enabled": true,
+      "name": "corp-wifi",
+      "security": "wpapsk"
+    }
+  ]
+}

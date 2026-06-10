@@ -2,9 +2,12 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/solomonneas/cutsheet/internal/secrets"
 )
 
 func TestNew(t *testing.T) {
@@ -20,11 +23,12 @@ func TestNew(t *testing.T) {
 		{"file bad json", "file", `{`, true},
 		{"unknown type", "carrier-pigeon", `{}`, true},
 		{"empty type", "", `{}`, true},
-		{"ssh not implemented yet", "ssh", `{"address":"198.18.0.1"}`, true},
+		{"ssh incomplete config", "ssh", `{"address":"198.18.0.1"}`, true},
+		{"unifi incomplete config", "unifi", `{"site":"default"}`, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := New(tt.collectorType, []byte(tt.configJSON))
+			c, err := New(tt.collectorType, []byte(tt.configJSON), nil)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("want error, got nil")
@@ -48,7 +52,7 @@ func TestFileCollectorFetch(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	c, err := New("file", []byte(`{"path":"`+path+`"}`))
+	c, err := New("file", []byte(`{"path":"`+path+`"}`), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -62,7 +66,7 @@ func TestFileCollectorFetch(t *testing.T) {
 }
 
 func TestFileCollectorFetchMissingFile(t *testing.T) {
-	c, err := New("file", []byte(`{"path":"`+filepath.Join(t.TempDir(), "absent.cfg")+`"}`))
+	c, err := New("file", []byte(`{"path":"`+filepath.Join(t.TempDir(), "absent.cfg")+`"}`), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -76,7 +80,7 @@ func TestFileCollectorFetchCancelledContext(t *testing.T) {
 	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	c, err := New("file", []byte(`{"path":"`+path+`"}`))
+	c, err := New("file", []byte(`{"path":"`+path+`"}`), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -85,4 +89,102 @@ func TestFileCollectorFetchCancelledContext(t *testing.T) {
 	if _, err := c.Fetch(ctx); err == nil {
 		t.Fatal("Fetch with cancelled context: want error, got nil")
 	}
+}
+
+func TestNeedsSecrets(t *testing.T) {
+	tests := []struct {
+		collectorType string
+		want          bool
+	}{
+		{"file", false},
+		{"unifi", true},
+		{"ssh", true},
+		{"carrier-pigeon", false},
+	}
+	for _, tt := range tests {
+		if got := NeedsSecrets(tt.collectorType); got != tt.want {
+			t.Errorf("NeedsSecrets(%q) = %v, want %v", tt.collectorType, got, tt.want)
+		}
+	}
+}
+
+func TestEncryptConfig(t *testing.T) {
+	box := testBox(t)
+
+	t.Run("file passes through unchanged", func(t *testing.T) {
+		in := `{"path": "/tmp/x.cfg"}` // odd spacing must survive untouched
+		out, err := EncryptConfig("file", []byte(in), box)
+		if err != nil {
+			t.Fatalf("EncryptConfig: %v", err)
+		}
+		if string(out) != in {
+			t.Fatalf("file config changed: got %q, want %q", out, in)
+		}
+	})
+
+	t.Run("unifi password encrypted", func(t *testing.T) {
+		out, err := EncryptConfig("unifi", []byte(`{"url":"https://c.example.invalid","username":"u","password":"hunter2"}`), box)
+		if err != nil {
+			t.Fatalf("EncryptConfig: %v", err)
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal(out, &cfg); err != nil {
+			t.Fatalf("parse output: %v", err)
+		}
+		password, _ := cfg["password"].(string)
+		if !secrets.IsEncrypted(password) {
+			t.Fatalf("password not encrypted: %q", password)
+		}
+		plain, err := box.Decrypt(password)
+		if err != nil {
+			t.Fatalf("Decrypt: %v", err)
+		}
+		if string(plain) != "hunter2" {
+			t.Fatalf("decrypted password: got %q", plain)
+		}
+		if url, _ := cfg["url"].(string); url != "https://c.example.invalid" {
+			t.Fatalf("non-sensitive field changed: %q", url)
+		}
+	})
+
+	t.Run("ssh password and private_key encrypted", func(t *testing.T) {
+		out, err := EncryptConfig("ssh", []byte(`{"host":"h.example.invalid","username":"u","password":"p","private_key":"PEM"}`), box)
+		if err != nil {
+			t.Fatalf("EncryptConfig: %v", err)
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal(out, &cfg); err != nil {
+			t.Fatalf("parse output: %v", err)
+		}
+		for _, field := range []string{"password", "private_key"} {
+			value, _ := cfg[field].(string)
+			if !secrets.IsEncrypted(value) {
+				t.Fatalf("%s not encrypted: %q", field, value)
+			}
+		}
+	})
+
+	t.Run("already encrypted passes through", func(t *testing.T) {
+		enc, err := box.Encrypt([]byte("hunter2"))
+		if err != nil {
+			t.Fatalf("Encrypt: %v", err)
+		}
+		out, err := EncryptConfig("unifi", []byte(`{"password":"`+enc+`"}`), box)
+		if err != nil {
+			t.Fatalf("EncryptConfig: %v", err)
+		}
+		var cfg map[string]string
+		if err := json.Unmarshal(out, &cfg); err != nil {
+			t.Fatalf("parse output: %v", err)
+		}
+		if cfg["password"] != enc {
+			t.Fatalf("double encryption: got %q, want %q", cfg["password"], enc)
+		}
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		if _, err := EncryptConfig("ssh", []byte(`{`), box); err == nil {
+			t.Fatal("EncryptConfig with bad JSON: want error, got nil")
+		}
+	})
 }

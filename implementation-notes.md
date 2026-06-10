@@ -99,3 +99,58 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   stable and reads exactly the committed bytes.
 - **HandleChange returns the recorded Change** (with the new row id) so the
   upcoming REST/notifier layers can use it without a re-query.
+
+## 2026-06-09 - UniFi + SSH collectors, credentials encrypted at rest
+
+- **Secrets format and key resolution.** `internal/secrets` wraps NaCl
+  secretbox; values are self-describing `enc:v1:<base64 nonce+box>` strings so
+  they live inside collector config JSON unchanged. Key resolution:
+  `CUTSHEET_SECRET_KEY` env (64 hex chars) wins; otherwise a key is
+  auto-generated at `<data-dir>/secret.key` (0600) on first use and loaded
+  thereafter. Tradeoff, on purpose: the auto-generated file means anyone with
+  the whole data dir has the key, but the boomer-friendly default (no env-var
+  ceremony) still protects against partial leaks (db-only backups, SQL access,
+  copied registry dumps). Document `CUTSHEET_SECRET_KEY` as the hardening
+  knob, not a requirement.
+- **Encryption boundary is `device add`, decryption boundary is Fetch.** The
+  collector factory takes an optional `*secrets.Box`; `New(type, config, nil)`
+  still works for validation because constructors never decrypt. Plaintext
+  credentials in config pass through `decryptIfNeeded` untouched, so dev/test
+  setups and pre-encryption configs keep working. `collector.EncryptConfig`
+  knows each type's sensitive fields (unifi: password; ssh: password +
+  private_key) and is a byte-for-byte no-op for types without any, so `file`
+  device adds never even generate a secret key.
+- **UniFi collector output determinism is the contract.** Controllers do not
+  guarantee array order, and any byte flutter would make every poll look like
+  a change. Output is one JSON document marshaled from a fixed-order struct
+  (top-level keys: networkconf, portconf, port_overrides, firewallrule,
+  firewallgroup, routing, wlanconf - exactly the sections the configdiff
+  unifi-json parser keys on), object keys sorted by encoding/json's map
+  ordering, arrays sorted by `_id` with a compact-JSON fallback for entries
+  without one (port_overrides). Golden + shuffled-server tests pin this.
+- **UniFi endpoints:** `/api/s/<site>/rest/{networkconf,portconf,firewallrule,
+  firewallgroup,routing,wlanconf}` plus `/api/s/<site>/stat/device`, from
+  which all devices' `port_overrides` arrays are flattened into the one
+  top-level key the parser expects. Empty sections marshal as `[]`, keeping
+  the shape stable.
+- **UniFi auth auto-detect:** try UniFi OS first (`POST /api/auth/login`,
+  API prefix `/proxy/network`), fall back to legacy (`POST /api/login`, no
+  prefix). `unifi_os: true|false` pins the style and skips the probe.
+  Cookie-jar session; the `X-CSRF-Token` from the OS login response is echoed
+  on subsequent requests (some UniFi OS versions require it, harmless
+  elsewhere).
+- **SSH host-key policy:** verify against the configured `host_key` (openssh
+  authorized-key format) via `ssh.FixedHostKey`; skipping verification
+  requires the literal `insecure_ignore_host_key: true`. There is no silent
+  fallback to InsecureIgnoreHostKey, and config without either is rejected at
+  add time.
+- **SSH presets** map to the show command whose output the matching configdiff
+  parser consumes (edgeos/vyos share the vyatta wrapper command). Explicit
+  `command` overrides the preset; the preset still drives the vendor default
+  at `device add` (`--vendor` omitted: unifi -> unifi-json, ssh preset ->
+  same-named vendor mode). Explicit `--vendor` always wins (flag.Visit
+  detection, so `--vendor auto` is respected as an explicit choice).
+- **In-process SSH test server gotcha:** after writing output and sending
+  `exit-status`, the server must close the channel or the client's stdout
+  reader never sees EOF and `session.Output` hangs forever (found as a 600s
+  test timeout, not a clever insight).

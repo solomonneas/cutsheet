@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 	"github.com/solomonneas/cutsheet/internal/collector"
 	"github.com/solomonneas/cutsheet/internal/pipeline"
 	"github.com/solomonneas/cutsheet/internal/scheduler"
+	"github.com/solomonneas/cutsheet/internal/secrets"
 	"github.com/solomonneas/cutsheet/internal/snapshots"
 	"github.com/solomonneas/cutsheet/internal/store"
 )
@@ -88,7 +90,12 @@ func runServe(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	sched := scheduler.New(st, snaps, handler, scheduler.Options{Logger: logger})
+	box, err := secrets.Open(*dataDir)
+	if err != nil {
+		return fmt.Errorf("open secrets: %w", err)
+	}
+
+	sched := scheduler.New(st, snaps, handler, scheduler.Options{Logger: logger, Secrets: box})
 	if err := sched.Start(ctx); err != nil {
 		return fmt.Errorf("start scheduler: %w", err)
 	}
@@ -135,7 +142,7 @@ func parseDeviceAdd(args []string) (addedDevice, error) {
 	name := fs.String("name", "", "display name (defaults to id)")
 	vendor := fs.String("vendor", "auto", "configdiff parser mode (e.g. cisco-ios, unifi-json, auto)")
 	address := fs.String("address", "", "device address")
-	collectorType := fs.String("collector", "file", "collector type (v1: file)")
+	collectorType := fs.String("collector", "file", "collector type (file, unifi, ssh)")
 	configJSON := fs.String("config", "{}", "collector config JSON")
 	interval := fs.Int("interval", 300, "poll interval in seconds (0 = manual only)")
 	disabled := fs.Bool("disabled", false, "register the device without polling it")
@@ -153,12 +160,18 @@ func parseDeviceAdd(args []string) (addedDevice, error) {
 		return addedDevice{}, fmt.Errorf("interval must be >= 0, got %d", *interval)
 	}
 	// Validate the collector type and config up front so a bad registration
-	// fails at add time, not at first poll.
-	if _, err := collector.New(*collectorType, []byte(*configJSON)); err != nil {
+	// fails at add time, not at first poll. The nil secrets box is fine here:
+	// credentials are only decrypted at fetch time.
+	if _, err := collector.New(*collectorType, []byte(*configJSON), nil); err != nil {
 		return addedDevice{}, fmt.Errorf("invalid collector: %w", err)
 	}
 	if *name == "" {
 		*name = *id
+	}
+	if !flagWasSet(fs, "vendor") {
+		if suggested := suggestedVendor(*collectorType, []byte(*configJSON)); suggested != "" {
+			*vendor = suggested
+		}
 	}
 
 	return addedDevice{
@@ -182,6 +195,38 @@ func validDeviceID(id string) bool {
 	return deviceIDPattern.MatchString(id)
 }
 
+// flagWasSet reports whether the user passed the named flag explicitly.
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
+}
+
+// suggestedVendor picks a configdiff parser mode from the collector setup
+// when --vendor was omitted: unifi collectors emit controller JSON, and ssh
+// presets name the vendor they target. Returns "" when there is no better
+// suggestion than the flag default.
+func suggestedVendor(collectorType string, configJSON []byte) string {
+	switch collectorType {
+	case "unifi":
+		return "unifi-json"
+	case "ssh":
+		var cfg struct {
+			Preset string `json:"preset"`
+		}
+		if err := json.Unmarshal(configJSON, &cfg); err != nil {
+			return ""
+		}
+		return collector.PresetVendor(cfg.Preset)
+	default:
+		return ""
+	}
+}
+
 func runDeviceAdd(args []string) error {
 	parsed, err := parseDeviceAdd(args)
 	if err != nil {
@@ -195,6 +240,21 @@ func runDeviceAdd(args []string) error {
 		return err
 	}
 	defer st.Close()
+
+	// Encrypt credential fields before they touch the database. Only
+	// credential-bearing collector types open the secrets box, so a file-only
+	// setup never generates a key.
+	if collector.NeedsSecrets(parsed.device.CollectorType) {
+		box, err := secrets.Open(parsed.dataDir)
+		if err != nil {
+			return fmt.Errorf("open secrets: %w", err)
+		}
+		encrypted, err := collector.EncryptConfig(parsed.device.CollectorType, []byte(parsed.device.CollectorConfig), box)
+		if err != nil {
+			return err
+		}
+		parsed.device.CollectorConfig = string(encrypted)
+	}
 
 	if err := st.CreateDevice(context.Background(), parsed.device); err != nil {
 		return err

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/solomonneas/cutsheet/internal/collector"
+	"github.com/solomonneas/cutsheet/internal/secrets"
 	"github.com/solomonneas/cutsheet/internal/snapshots"
 	"github.com/solomonneas/cutsheet/internal/store"
 )
@@ -35,6 +36,9 @@ type Options struct {
 	// Interval overrides the per-device poll interval (tests use this to run
 	// sub-second). Defaults to PollIntervalSeconds.
 	Interval func(store.Device) time.Duration
+	// Secrets decrypts encrypted collector credentials. Nil is fine for
+	// collectors without credentials (e.g. file).
+	Secrets *secrets.Box
 }
 
 // Scheduler runs one polling goroutine per enabled device.
@@ -160,7 +164,7 @@ func samePollingConfig(a, b store.Device) bool {
 func (s *Scheduler) run(ctx context.Context, device store.Device) {
 	defer s.wg.Done()
 
-	coll, err := collector.New(device.CollectorType, []byte(device.CollectorConfig))
+	coll, err := collector.New(device.CollectorType, []byte(device.CollectorConfig), s.opts.Secrets)
 	if err != nil {
 		s.opts.Logger.Error("collector init failed, device not polled",
 			"device", device.ID, "collector", device.CollectorType, "error", err)
