@@ -70,3 +70,32 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   RecordChange + reports) plugs into that seam next.
 - **go.mod jumped to go 1.25.0** because current go-git/modernc releases
   require it; toolchain auto-download handles the local 1.22 install.
+
+## 2026-06-09 - Analysis pipeline (snapshot change -> recorded findings)
+
+- **Temp-file bridge to Explain().** `configdiff.Explain` is path-based and
+  must stay untouched (stable public API), so `internal/pipeline` writes
+  `SaveResult.PrevContent` and the current content to a throwaway
+  `os.MkdirTemp` dir and removes it after the call. The report dir is the
+  product artifact and is kept.
+- **Report dir naming:** `<reportsRoot>/<deviceID>/<UTC YYYYMMDD-HHMMSS>-<8-char
+  commit hash>`. Timestamp sorts naturally, the short hash disambiguates and
+  ties the bundle back to the snapshot commit. The serve command roots reports
+  at `<data-dir>/reports`.
+- **Severity ladder** none < low < medium < high lives in the pipeline (rank
+  map), not configdiff: configdiff emits per-finding severities, the rollup is
+  a storage/UX concern. Unknown severity strings rank as none, so a future
+  configdiff severity can't crash the rollup (it would just rank low until the
+  map learns it).
+- **Summary line format:** `"3 findings (1 high) - 5 blocks changed"`, where
+  the parenthetical counts findings at the max severity tier. Zero-finding
+  changes record `"no findings - N blocks changed"`.
+- **First snapshots get a change row too** (summary "initial snapshot",
+  severity none, `{}` analysis, no report dir): the timeline shows when
+  monitoring began, and the scheduler's Changed=true on first save means the
+  handler fires anyway.
+- **Handler reloads content via snaps.GetAt(commit)** rather than widening the
+  scheduler's ChangeHandler signature with a content param; keeps the seam
+  stable and reads exactly the committed bytes.
+- **HandleChange returns the recorded Change** (with the new row id) so the
+  upcoming REST/notifier layers can use it without a re-query.

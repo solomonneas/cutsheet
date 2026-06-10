@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/solomonneas/cutsheet/internal/collector"
+	"github.com/solomonneas/cutsheet/internal/pipeline"
 	"github.com/solomonneas/cutsheet/internal/scheduler"
 	"github.com/solomonneas/cutsheet/internal/snapshots"
 	"github.com/solomonneas/cutsheet/internal/store"
@@ -62,12 +63,26 @@ func runServe(args []string) error {
 	}
 	defer st.Close()
 
-	// The analysis pipeline plugs in here later; for now changes are logged.
+	// Every changed snapshot (including a device's first) flows through the
+	// analysis pipeline: diff, report bundle, recorded change + findings.
+	pipe := pipeline.New(st, filepath.Join(*dataDir, "reports"), logger)
 	handler := func(ctx context.Context, device store.Device, result snapshots.SaveResult) {
-		logger.Info("config change detected",
+		current, err := snaps.GetAt(device.ID, result.CommitHash)
+		if err != nil {
+			logger.Error("load snapshot content failed",
+				"device", device.ID, "commit", result.CommitHash, "error", err)
+			return
+		}
+		change, err := pipe.HandleChange(ctx, device, result, current)
+		if err != nil {
+			logger.Error("change analysis failed", "device", device.ID, "error", err)
+			return
+		}
+		logger.Info("config change recorded",
 			"device", device.ID,
-			"commit", result.CommitHash,
-			"prev_commit", result.PrevCommitHash)
+			"severity", change.MaxSeverity,
+			"findings", len(change.Findings),
+			"report_dir", change.ReportDir)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
