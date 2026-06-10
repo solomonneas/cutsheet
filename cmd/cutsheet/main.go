@@ -25,6 +25,7 @@ import (
 	"github.com/solomonneas/cutsheet/internal/secrets"
 	"github.com/solomonneas/cutsheet/internal/snapshots"
 	"github.com/solomonneas/cutsheet/internal/store"
+	"github.com/solomonneas/cutsheet/internal/webui"
 )
 
 // version is the build version reported by /healthz (overridable via
@@ -152,7 +153,10 @@ func runServe(args []string) error {
 		sched.Stop()
 		return fmt.Errorf("listen on %s: %w", *listen, err)
 	}
-	srv := &http.Server{Handler: apiHandler, ReadHeaderTimeout: 10 * time.Second}
+	// The embedded web UI handles every path the API does not: /api/ and
+	// /healthz stay on the API handler (auth and all), everything else is the
+	// SPA with index.html fallback for client routes.
+	srv := &http.Server{Handler: webui.Root(apiHandler), ReadHeaderTimeout: 10 * time.Second}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
 

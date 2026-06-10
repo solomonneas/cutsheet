@@ -251,3 +251,53 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   before auth because they never carry Authorization. Graceful shutdown:
   http.Server.Shutdown with a 5s budget inside the existing signal path,
   then scheduler stop.
+
+## 2026-06-09 - Web UI (Vite + React + TS, embedded via go:embed)
+
+- **Dependencies: react, react-dom, react-router-dom, nothing else.** No UI
+  kit, no fetch library, no state manager; one hand-rolled stylesheet
+  (`web/src/styles.css`) with CSS variables. Severity colors match the
+  notifier exactly (high #E74C3C, medium #E67E22, low #F1C40F, none gray).
+  Dev gate is `tsc --noEmit` inside `npm run build` instead of adding vitest:
+  the UI logic is thin enough that the type checker plus the Go-side serving
+  tests cover the seams, and it keeps node_modules small.
+- **`web/dist` is committed to git.** `go build ./cmd/cutsheet` and
+  `go install` must work without Node (single-binary adoption story, same
+  reasoning as SQLite-over-Postgres), and go:embed needs the files present at
+  compile time. No build tag guard; the dist is just always there. Rebuild
+  with `make ui` (npm ci + vite build) after touching `web/src`, then rebuild
+  the server.
+- **Embed lives in `web/embed.go` (package web), serving logic in
+  `internal/webui`.** go:embed cannot reference files outside the package
+  directory, so `internal/webui` cannot embed `../../web/dist` directly. The
+  `web` package is a two-line embed.FS holder; webui owns the SPA rules and
+  is the tested surface.
+- **Routing: `webui.Root(api)` wraps the API handler with a tiny mux** -
+  `/api/` and `/healthz` go to the API (auth, CORS, logging untouched),
+  everything else to the SPA handler. Static files serve from the embedded
+  FS; extensionless paths fall back to index.html (client routes survive
+  refresh); pathy-looking asset names that do not exist 404 instead of
+  returning HTML. The SPA itself is unauthenticated by design: it is a
+  static shell with no data in it, and every API call it makes goes through
+  bearer auth.
+- **Report iframe uses a blob URL, not a direct src.** `<iframe src>` cannot
+  carry an Authorization header, so once tokens exist a direct iframe at
+  `/api/v1/changes/{id}/reports/report.html` would 401. The UI fetches the
+  HTML with the bearer header and renders it from a Blob object URL; other
+  report files download the same way.
+- **Finding evidence comes from the analysis document.** The findings table
+  rows (and findings JSON) deliberately do not carry evidence/details; the
+  change detail page merges `analysis.risk_findings` into the stored finding
+  rows by finding id to render evidence lines in monospace.
+- **Auth state probe = GET /devices.** "Open access" (zero-token localhost
+  mode) is detected as: request succeeds with no token stored. 401 renders a
+  paste-a-token banner; Settings stores the token in localStorage and the
+  fetch wrapper attaches it as a Bearer header.
+- **Timeline findings count parses the summary line** ("13 findings (4 high)
+  - 12 blocks changed") because the list endpoint intentionally omits
+  findings; a count regex beats widening the list payload.
+- **Smoke-tested end to end:** built binary in a temp dir, seeded file
+  devices from the sample fixtures via the API, verified SPA shell at `/`,
+  index fallback at `/devices` and `/changes/{id}`, JSON `/healthz`,
+  hashed-asset content types, and headless-Chrome renders of all four views
+  including a 13-finding high-severity change detail.

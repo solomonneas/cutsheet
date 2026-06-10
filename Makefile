@@ -1,4 +1,4 @@
-.PHONY: test vet build sample-report screenshot clean
+.PHONY: test vet build ui sample-report screenshot clean
 
 BINARY ?= cutsheet
 SAMPLE_OUT ?= ./reports/change-001
@@ -13,6 +13,13 @@ vet:
 
 build:
 	go build -o $(BINARY) ./cmd/cutsheet-cli
+
+# Rebuilds the web UI into web/dist, which is committed to git and embedded
+# into the server binary via go:embed. Run `make ui` then rebuild the server
+# after changing anything under web/src. A plain `go build ./cmd/cutsheet`
+# works without Node because web/dist is checked in.
+ui:
+	cd web && npm ci && npm run build
 
 sample-report:
 	go run ./cmd/cutsheet-cli explain \
