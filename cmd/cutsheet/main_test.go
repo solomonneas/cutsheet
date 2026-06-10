@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,5 +263,101 @@ func TestRunDeviceAddFileSkipsSecretKey(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "secret.key")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("file collector should not generate a secret key (stat err: %v)", err)
+	}
+}
+
+func TestResolveNotifySettings(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		env     map[string]string
+		want    notifySettings
+		wantErr string
+	}{
+		{
+			name: "defaults",
+			want: notifySettings{minSeverity: "low"},
+		},
+		{
+			name: "flags only",
+			args: []string{
+				"--webhook-url", "https://hooks.example.com/a",
+				"--discord-webhook-url", "https://discord.example.com/b",
+				"--notify-min-severity", "high",
+			},
+			want: notifySettings{
+				webhookURL:  "https://hooks.example.com/a",
+				discordURL:  "https://discord.example.com/b",
+				minSeverity: "high",
+			},
+		},
+		{
+			name: "env fallback",
+			env: map[string]string{
+				"CUTSHEET_WEBHOOK_URL":         "https://hooks.example.com/env",
+				"CUTSHEET_DISCORD_WEBHOOK_URL": "https://discord.example.com/env",
+				"CUTSHEET_NOTIFY_MIN_SEVERITY": "medium",
+			},
+			want: notifySettings{
+				webhookURL:  "https://hooks.example.com/env",
+				discordURL:  "https://discord.example.com/env",
+				minSeverity: "medium",
+			},
+		},
+		{
+			name: "flags win over env",
+			args: []string{
+				"--webhook-url", "https://hooks.example.com/flag",
+				"--notify-min-severity", "none",
+			},
+			env: map[string]string{
+				"CUTSHEET_WEBHOOK_URL":         "https://hooks.example.com/env",
+				"CUTSHEET_DISCORD_WEBHOOK_URL": "https://discord.example.com/env",
+				"CUTSHEET_NOTIFY_MIN_SEVERITY": "medium",
+			},
+			want: notifySettings{
+				webhookURL:  "https://hooks.example.com/flag",
+				discordURL:  "https://discord.example.com/env",
+				minSeverity: "none",
+			},
+		},
+		{
+			name:    "invalid severity flag",
+			args:    []string{"--notify-min-severity", "critical"},
+			wantErr: "notify-min-severity",
+		},
+		{
+			name:    "invalid severity env",
+			env:     map[string]string{"CUTSHEET_NOTIFY_MIN_SEVERITY": "urgent"},
+			wantErr: "notify-min-severity",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+			webhookURL := fs.String("webhook-url", "", "")
+			discordURL := fs.String("discord-webhook-url", "", "")
+			minSeverity := fs.String("notify-min-severity", "low", "")
+			if err := fs.Parse(tt.args); err != nil {
+				t.Fatalf("parse flags: %v", err)
+			}
+			getenv := func(key string) string { return tt.env[key] }
+			got, err := resolveNotifySettings(fs, *webhookURL, *discordURL, *minSeverity, getenv)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("want error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveNotifySettings: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("settings:\n got %+v\nwant %+v", got, tt.want)
+			}
+		})
 	}
 }

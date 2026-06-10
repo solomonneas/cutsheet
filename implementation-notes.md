@@ -154,3 +154,35 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
   `exit-status`, the server must close the channel or the client's stdout
   reader never sees EOF and `session.Output` hangs forever (found as a 600s
   test timeout, not a clever insight).
+
+## 2026-06-09 - Notifications (webhook + Discord, severity-filtered)
+
+- **Severity ladder canonicalized in `store.SeverityRank`.** The rank map was
+  born unexported in the pipeline; with the notifier needing the same ladder
+  for its min-severity filter, the ordering moved to `internal/store` as an
+  exported function (store owns the `none/low/medium/high` vocabulary on
+  Change/Finding anyway). Pipeline's `maxSeverity` now delegates to it; the
+  unknown-severity-ranks-as-none rule is preserved and documented there.
+- **Retry policy: one retry, 2s backoff, 10s per-request timeout.** Both
+  notifiers retry once on a 5xx response or transport error and fail fast on
+  4xx (a rejected payload won't get better by resending). Backoff is an
+  unexported field so tests run in milliseconds; the HTTP client is
+  injectable, the default carries the 10s timeout.
+- **`Fanout.Notify` returns nothing on purpose.** Delivery failures are
+  logged per notifier and swallowed: one dead webhook must not block the
+  other sinks or fail the pipeline. The serve handler fires it in the same
+  goroutine as `HandleChange` since the timeouts bound the worst-case delay
+  to one poll loop, not the process.
+- **Min-severity filter semantics:** `none` notifies on everything including
+  initial snapshots (their changes record severity "none"); the default
+  `low` means any finding-bearing change. Empty MinSeverity also falls back
+  to `low` so a zero-valued Fanout is safe.
+- **Flag/env precedence:** `--webhook-url`, `--discord-webhook-url`,
+  `--notify-min-severity` win over `CUTSHEET_WEBHOOK_URL`,
+  `CUTSHEET_DISCORD_WEBHOOK_URL`, `CUTSHEET_NOTIFY_MIN_SEVERITY`; the env var
+  only fills in when the flag was omitted (flag.Visit detection, same trick
+  as `device add --vendor`). Invalid severities are rejected at startup, not
+  at first change.
+- **Discord embed gotcha:** Discord rejects embeds with empty field values,
+  and initial snapshots have no report bundle, so an empty ReportDir renders
+  as `(none)` in the Report dir field.

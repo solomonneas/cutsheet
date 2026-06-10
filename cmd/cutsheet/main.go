@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/solomonneas/cutsheet/internal/collector"
+	"github.com/solomonneas/cutsheet/internal/notify"
 	"github.com/solomonneas/cutsheet/internal/pipeline"
 	"github.com/solomonneas/cutsheet/internal/scheduler"
 	"github.com/solomonneas/cutsheet/internal/secrets"
@@ -50,14 +51,30 @@ func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	dataDir := fs.String("data-dir", "", "data directory (database + snapshot repo)")
+	webhookURL := fs.String("webhook-url", "", "POST change events as JSON to this URL (env CUTSHEET_WEBHOOK_URL)")
+	discordURL := fs.String("discord-webhook-url", "", "POST change embeds to this Discord webhook URL (env CUTSHEET_DISCORD_WEBHOOK_URL)")
+	minSeverity := fs.String("notify-min-severity", "low", "minimum change severity to notify on: none, low, medium, high (env CUTSHEET_NOTIFY_MIN_SEVERITY)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *dataDir == "" {
 		return fmt.Errorf("serve requires --data-dir")
 	}
+	notifyCfg, err := resolveNotifySettings(fs, *webhookURL, *discordURL, *minSeverity, os.Getenv)
+	if err != nil {
+		return err
+	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	var notifiers []notify.Notifier
+	if notifyCfg.webhookURL != "" {
+		notifiers = append(notifiers, &notify.Webhook{URL: notifyCfg.webhookURL})
+	}
+	if notifyCfg.discordURL != "" {
+		notifiers = append(notifiers, &notify.Discord{URL: notifyCfg.discordURL})
+	}
+	fanout := &notify.Fanout{Notifiers: notifiers, MinSeverity: notifyCfg.minSeverity, Logger: logger}
 
 	st, snaps, err := openDataDir(*dataDir)
 	if err != nil {
@@ -85,6 +102,11 @@ func runServe(args []string) error {
 			"severity", change.MaxSeverity,
 			"findings", len(change.Findings),
 			"report_dir", change.ReportDir)
+		// Same goroutine on purpose: the notifiers have their own timeouts,
+		// and Fanout logs failures instead of returning them, so a dead
+		// webhook can delay this device's poll loop briefly but never crash
+		// or fail the pipeline.
+		fanout.Notify(ctx, notify.EventFromChange(device, change))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -110,6 +132,42 @@ func runServe(args []string) error {
 	logger.Info("shutting down")
 	sched.Stop()
 	return nil
+}
+
+// notifySettings is the resolved notification config for serve.
+type notifySettings struct {
+	webhookURL  string
+	discordURL  string
+	minSeverity string
+}
+
+// resolveNotifySettings merges notification flags with their environment
+// fallbacks (CUTSHEET_WEBHOOK_URL, CUTSHEET_DISCORD_WEBHOOK_URL,
+// CUTSHEET_NOTIFY_MIN_SEVERITY). An explicitly passed flag always wins over
+// the environment; the env var only fills in when the flag was omitted.
+func resolveNotifySettings(fs *flag.FlagSet, webhookURL, discordURL, minSeverity string, getenv func(string) string) (notifySettings, error) {
+	s := notifySettings{webhookURL: webhookURL, discordURL: discordURL, minSeverity: minSeverity}
+	if !flagWasSet(fs, "webhook-url") {
+		if v := getenv("CUTSHEET_WEBHOOK_URL"); v != "" {
+			s.webhookURL = v
+		}
+	}
+	if !flagWasSet(fs, "discord-webhook-url") {
+		if v := getenv("CUTSHEET_DISCORD_WEBHOOK_URL"); v != "" {
+			s.discordURL = v
+		}
+	}
+	if !flagWasSet(fs, "notify-min-severity") {
+		if v := getenv("CUTSHEET_NOTIFY_MIN_SEVERITY"); v != "" {
+			s.minSeverity = v
+		}
+	}
+	switch s.minSeverity {
+	case "none", "low", "medium", "high":
+	default:
+		return notifySettings{}, fmt.Errorf("invalid --notify-min-severity %q: use none, low, medium, or high", s.minSeverity)
+	}
+	return s, nil
 }
 
 func runDevice(args []string) error {

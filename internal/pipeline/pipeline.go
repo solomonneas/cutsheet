@@ -138,16 +138,12 @@ func (p *Pipeline) analyzeAndRecord(ctx context.Context, device store.Device, re
 	return change, nil
 }
 
-// severityRank orders the severity ladder none < low < medium < high.
-// Unknown severities rank with none.
-var severityRank = map[string]int{"none": 0, "low": 1, "medium": 2, "high": 3}
-
 // maxSeverity returns the highest severity across findings, or "none" when
-// there are no findings.
+// there are no findings. The ladder itself is canonical in store.SeverityRank.
 func maxSeverity(findings []configdiff.RiskFinding) string {
 	max := "none"
 	for _, f := range findings {
-		if severityRank[f.Severity] > severityRank[max] {
+		if store.SeverityRank(f.Severity) > store.SeverityRank(max) {
 			max = f.Severity
 		}
 	}

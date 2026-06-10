@@ -221,3 +221,22 @@ func TestListChanges(t *testing.T) {
 		})
 	}
 }
+
+func TestSeverityRank(t *testing.T) {
+	tests := []struct {
+		severity string
+		want     int
+	}{
+		{"none", 0},
+		{"low", 1},
+		{"medium", 2},
+		{"high", 3},
+		{"", 0},
+		{"catastrophic", 0}, // unknown severities rank with none
+	}
+	for _, tt := range tests {
+		if got := SeverityRank(tt.severity); got != tt.want {
+			t.Errorf("SeverityRank(%q) = %d, want %d", tt.severity, got, tt.want)
+		}
+	}
+}

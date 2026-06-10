@@ -381,6 +381,24 @@ func scanChange(row scanner) (Change, error) {
 	return c, nil
 }
 
+// SeverityRank returns the position of severity on the ladder
+// none < low < medium < high (0..3). It is the canonical ordering for
+// Change.MaxSeverity and Finding.Severity values; unknown severities rank
+// with none so a new configdiff severity can never crash a rollup or
+// filter, it just sorts low until callers learn it.
+func SeverityRank(severity string) int {
+	switch severity {
+	case "low":
+		return 1
+	case "medium":
+		return 2
+	case "high":
+		return 3
+	default:
+		return 0
+	}
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1
