@@ -2,6 +2,8 @@ module github.com/solomonneas/cutsheet
 
 go 1.25.0
 
+toolchain go1.25.11
+
 require (
 	github.com/go-git/go-git/v5 v5.19.1
 	golang.org/x/crypto v0.52.0
