@@ -36,3 +36,37 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
 - **Name:** Trunkline was the first pick; burned (live MCP-infra product at
   trunkline.dev). Cutsheet cleared on GitHub/npm/PyPI/cutsheet.dev/.io as of
   2026-06-09. Domain registration is Solomon's action item.
+
+## 2026-06-09 - Device registry, snapshot store, scheduler, server skeleton
+
+- **SQLite instead of Postgres for v1.** The design spec says Postgres, but v1
+  optimizes for adoption: a single binary with `modernc.org/sqlite` (pure Go,
+  no cgo) means `cutsheet serve --data-dir ./data` works with zero external
+  services. All persistence is behind the `internal/store` API, so swapping in
+  Postgres for multi-tenant in v1.x is an implementation change, not an API
+  change. Embedded SQL migrations (go:embed + schema_migrations table) keep the
+  upgrade path honest from day one.
+- **Single SQLite connection** (`SetMaxOpenConns(1)`) plus WAL and
+  busy_timeout: modernc's driver returns SQLITE_BUSY under pooled concurrent
+  writers; one connection sidesteps it at v1's write volume.
+- **Snapshot store compares against HEAD, not the worktree.** Save() reads the
+  previous content from the HEAD commit tree, so a dirty or hand-edited
+  worktree file can't suppress (or fabricate) change detection. PrevCommitHash
+  comes from `git log -- <file>` semantics (go-git LogOptions.FileName), so
+  devices never see each other's commits. Save() is mutex-serialized: one repo,
+  many device goroutines.
+- **Collector factory is a registration map.** v1 ships only "file"
+  (fixture-driven tests + zero-hardware demo mode); ssh/unifi slot in as new
+  map entries in a later unit. Collector config is validated at `device add`
+  time, not first poll.
+- **Scheduler is deliberately dumb:** one ticker goroutine per enabled device
+  with interval > 0, reconciled by Refresh() (stop removed/changed, start
+  new). No cron parsing. Poll errors log and continue; a failed collector
+  build logs and leaves the device unpolled until the next Refresh. 60s fetch
+  timeout default. Tests inject sub-second intervals via Options.Interval
+  instead of sleeping on real-time PollIntervalSeconds.
+- **Change handler is a callback** (`func(ctx, device, SaveResult)`); the
+  serve command just logs for now. The analysis pipeline (configdiff Explain +
+  RecordChange + reports) plugs into that seam next.
+- **go.mod jumped to go 1.25.0** because current go-git/modernc releases
+  require it; toolchain auto-download handles the local 1.22 install.
