@@ -349,7 +349,7 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
 
 ## 2026-06-09 - Docker smoke test + dogfood correction
 
-- **Docker smoke test PASSED** on a Proxmox CT (Ubuntu 24.04, docker.io 29.1.3,
+- **Docker smoke test PASSED** on an LXC container (Ubuntu 24.04, docker.io 29.1.3,
   compose 2.40): image builds from the multi-stage Dockerfile, compose comes up
   healthy, docker-bridge requests correctly hit the zero-token 401 (confirming
   the README caveat), `docker compose exec cutsheet cutsheet token create
@@ -413,7 +413,7 @@ Running log of decisions, deviations, and tradeoffs not captured in the spec
 
 ## 2026-06-09 - Live testbed: containerlab FRR, first real-device dogfood
 
-- Permanent testbed deployed on a Proxmox CT: containerlab 0.76 topology with two
+- Permanent testbed deployed on an LXC container: containerlab 0.76 topology with two
   FRR 10.2.1 routers (custom image: quay.io/frrouting/frr + openssh, vty group
   membership for the ssh user) with an OSPF adjacency on 198.18.100.0/30.
 - Collector setup that works against FRR: collector ssh, custom command
