@@ -98,6 +98,10 @@ clobber real monitoring data.
 
 ## What a finding looks like
 
+<p align="center">
+  <img src="docs/screenshots/finding.png" alt="Cutsheet change detail: a Core Switch config change flagged HIGH with risk findings - switchport mode changed from access to trunk, BPDU protection reduced on the trunk - each with the changed config blocks and an operator recommendation" width="900">
+</p>
+
 The headline feature is the deterministic risk analysis, not the diff. Run a
 config change through the offline CLI (or let the server do it on every poll)
 and you get findings written in operator language. From the bundled Catalyst
